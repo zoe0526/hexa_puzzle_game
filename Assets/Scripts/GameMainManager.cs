@@ -10,15 +10,17 @@ using UnityEngine.UI;
 public class GameMainManager : SymbolManager
 {
     [SerializeField]
-    private Transform[] symbol_layer_arr;   //0~6
+    private Transform symbol_layer_parent;
     [SerializeField]
     private MapManager _map_manager;
-    [SerializeField]
-    private Transform _symbol_drop_pos;
+
     [SerializeField]
     private Button _retry_btn;
     [SerializeField]
     public Text _combo_cnt_txt;
+
+    private Vector3[] _symbol_drop_pos;
+    byte[] each_line_deleted_symbol_cnt;
     private int get_random_num()
     {
         return Random.Range((int)block_type.Green_Block, (int)block_type.Yellow_Block + 1);
@@ -31,42 +33,70 @@ public class GameMainManager : SymbolManager
     {
         _combo_cnt_txt.text = value.ToString();
     }
-    public override void on_awake()
+    public override void on_start()
     {
-        base.on_awake();
+        base.on_start();
     }
     private void Awake()
     {
-        on_awake();
         _retry_btn.interactable = false;
     }
 
     private void Start()
     {
+        on_start();
         StartCoroutine(check_first_board_match(true));
         update_combo_UI(0);
+        set_drop_pos(PublicInfos.Instance.drop_type);
         //make_init_symbols();
     }
+    private void set_drop_pos(EDropType type)
+    {
+        switch(type)
+        {
+            case EDropType.JustDrop:
+                _symbol_drop_pos = new Vector3[PublicInfos.Instance.line_cnt-2];
+                for(int i=0; i<_symbol_drop_pos.Length;i++)
+                {
+                    _symbol_drop_pos[i]= _map_manager.get_box_pos_by_coordinate(i,
+                    PublicInfos.Instance.each_line_symbol_cnt[i])
+                    + Vector3.up * MapManager._symbols_distance;
 
-    int _block_row = 0;
+                }
+                break;
+            case EDropType.Popup:
+                break;
+            case EDropType.Spread:
+                _symbol_drop_pos = new Vector3[1];
+                _symbol_drop_pos[0] = _map_manager.get_box_pos_by_coordinate((PublicInfos.Instance.line_cnt-2)/2,
+                    PublicInfos.Instance.each_line_symbol_cnt[(PublicInfos.Instance.line_cnt - 3) / 2])
+                    +Vector3.up* MapManager._symbols_distance;
+
+                break;
+        }
+        
+    }
+
+
+
     private void make_init_symbols(bool first_board=false)
     {
         for (int i = 1; i < PublicInfos.Instance.line_cnt - 1; i++)
         {
-            float line_bottom_pos = _map_manager.BG_distance / 2 * (1 - PublicInfos.Instance.each_line_symbol_cnt[i - 1]);
+            float line_bottom_pos = MapManager._symbols_distance / 2 * (1 - PublicInfos.Instance.each_line_symbol_cnt[i - 1]);
             for (int j = 1; j < PublicInfos.Instance.row_cnt - 1; j++)
             {
                 if (PublicInfos.Instance.map_board[i, j] > 0)
                 {
                     if(first_board)
                     {
-                        init_Symbol(symbol_layer_arr[i - 1], block_type.Orange_Block.ToString(),
-                            line_bottom_pos + (j - 1) * _map_manager.BG_distance, i * PublicInfos.Instance.row_cnt + j);
+                        init_Symbol(symbol_layer_parent,_map_manager.get_box_pos_by_coordinate(i-1,j-1), block_type.Orange_Block.ToString(),
+                            i * PublicInfos.Instance.row_cnt + j);
                     }
                     else
                     {
-                        init_Symbol(symbol_layer_arr[i - 1], ((block_type)get_random_num()).ToString(),
-                            line_bottom_pos + (j - 1) * _map_manager.BG_distance, i * PublicInfos.Instance.row_cnt + j);
+                        init_Symbol(symbol_layer_parent, _map_manager.get_box_pos_by_coordinate(i - 1, j-1), ((block_type)get_random_num()).ToString(),
+                            i * PublicInfos.Instance.row_cnt + j);
                     }
                     
                 }
@@ -97,14 +127,19 @@ public class GameMainManager : SymbolManager
         yield return new WaitForSeconds(.5f);
         StartCoroutine(delete_process());
     }
-
-    int earased_cnt = 0;
-
-
+    
     private IEnumerator drop_remaining_symbols(List<int> deleted_symbols_list)
     {
         int deleted_symbols_cnt = deleted_symbols_list.Count;
         int go_to_index = 0;
+
+        each_line_deleted_symbol_cnt = new byte[line_cnt];
+        foreach(int num in deleted_symbols_list)
+        {
+            each_line_deleted_symbol_cnt[get_x_coordinate_by_index(num)]++;
+        }
+
+
 
         //step1. 남아있는 심볼들을 바닥으로 떨궈준다.
         for (int i = 1; i < line_cnt - 1; i++)
@@ -131,7 +166,7 @@ public class GameMainManager : SymbolManager
                     get_ball_by_index(go_to_index)._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
 
                     yield return new WaitForSeconds(.1f);
-                    _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)].play_anim("Stop");
+                    //_ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)].play_anim(ESymbol_Anim.Win);
 
                 }
 
@@ -140,59 +175,59 @@ public class GameMainManager : SymbolManager
         }
         //yield return new WaitForSeconds(.1f);
 
-        int pos_y = 0;
         Symbol base_ball = null;
         int curr_ball_index = 0;
         int random_dir = 0;
-        int target_index_left = 0;
-        int target_index_right = 0;
 
         //step2. 좌우에 빈칸이 존재하는데 맨위에 심볼들이존재할 경우 미끄러트려놔준다.
-        for (int i = 1; i < line_cnt - 1; i++)
+        if(PublicInfos.Instance.drop_type==EDropType.Spread)
         {
-            if (_ball_symbols_arr[i, PublicInfos.Instance.each_line_symbol_cnt[i - 1]] != null)
+            for (int i = 1; i < line_cnt - 1; i++)
             {
-                random_dir = get_random_dir();
-                base_ball = _ball_symbols_arr[i, PublicInfos.Instance.each_line_symbol_cnt[i - 1]];
-                curr_ball_index = base_ball._symbol_stat._block_num;
-
-                //밑, 왼쪽아래, 오른쪽 아래 우선순위 순서로 떨궈준다.
-                while (true)
+                if (_ball_symbols_arr[i, PublicInfos.Instance.each_line_symbol_cnt[i - 1]] != null)
                 {
-                    if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) == null &&
-                     PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) != 0)
-                    {
-                        go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
+                    random_dir = get_random_dir();
+                    base_ball = _ball_symbols_arr[i, PublicInfos.Instance.each_line_symbol_cnt[i - 1]];
+                    curr_ball_index = base_ball._symbol_stat._block_num;
 
-                    }
-                    else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) == null &&
-                        PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) != 0)
+                    //밑, 왼쪽아래, 오른쪽 아래 우선순위 순서로 떨궈준다.
+                    while (true)
                     {
-                        go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down];
-                    }
-                    else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) == null &&
-                        PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) != 0)
-                    {
-                        go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down];
-                    }
-                    else
-                    {
+                        if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) == null &&
+                         PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
 
-                        break;
+                        }
+                        else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) == null &&
+                            PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down];
+                        }
+                        else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) == null &&
+                            PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down];
+                        }
+                        else
+                        {
+
+                            break;
+                        }
+                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
+                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
+                        _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
+                        if (curr_ball_index != go_to_index)
+                            _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
+                        curr_ball_index = go_to_index;
+                        base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
+                        yield return new WaitForSeconds(.1f);
+                        base_ball.play_anim(ESymbol_Anim.Win);
                     }
-                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
-                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
-                    _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
-                    if(curr_ball_index!=go_to_index)
-                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
-                    curr_ball_index = go_to_index;
-                    base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
-                    yield return new WaitForSeconds(.1f);
-                    base_ball.play_anim("Stop");
+
                 }
 
             }
-
         }
 
         //yield return new WaitForSeconds(.1f);
@@ -200,52 +235,108 @@ public class GameMainManager : SymbolManager
          
         //step 3. 삭제된만큼 심볼들을 생성해준다.
         //위 포지션에 새로 생성 후 블록 위치로 이동
-        for (int i=0; i< deleted_symbols_cnt; i++)
+
+        switch(PublicInfos.Instance.drop_type)
         {
-            random_dir = get_random_dir();
-            Symbol made_symbol=make_drop_Symbol(_symbol_drop_pos, ((block_type)get_random_num()).ToString(),get_index_by_coordinate(line_cnt/2,row_cnt-2));
-            made_symbol.transform.DOMove(_map_manager.get_box_pos_by_index(get_index_by_coordinate(line_cnt / 2, row_cnt - 2)).position, .1f);
-            base_ball = made_symbol;
-            curr_ball_index = base_ball._symbol_stat._block_num;
-            yield return new WaitForSeconds(.1f);
+            case EDropType.JustDrop:
+                while (deleted_symbols_cnt > 0)
+                {
+                    for (int i = 1; i < each_line_deleted_symbol_cnt.Length - 1; i++)
+                    {
+                        if (each_line_deleted_symbol_cnt[i] > 0)
+                        {
+                            deleted_symbols_cnt--;
+                            each_line_deleted_symbol_cnt[i]--;
+                            Symbol made_symbol = make_drop_Symbol(symbol_layer_parent, _symbol_drop_pos[i - 1], ((block_type)get_random_num()).ToString(),
+                                get_index_by_coordinate(i, PublicInfos.Instance.each_line_symbol_cnt[i - 1]));
+                            yield return new WaitForSeconds(.05f);
+                            made_symbol.transform.DOMove(_map_manager.get_box_pos_by_index(get_index_by_coordinate(i, PublicInfos.Instance.each_line_symbol_cnt[i - 1])).position, .1f);
+                            base_ball = made_symbol;
+                            curr_ball_index = base_ball._symbol_stat._block_num;
+
+                            while (true)
+                            {
+                                if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) == null &&
+                                    PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) != 0)
+                                {
+                                    go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
+
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                                _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
+                                _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
+                                _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
+                                if (curr_ball_index != go_to_index)
+                                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
+                                curr_ball_index = go_to_index;
+                                base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
+                                base_ball.play_anim(ESymbol_Anim.Win_2, -1, 0f);
+                                base_ball.transform.SetParent(symbol_layer_parent);
+                            }
+
+                        }
+
+                    }
+                    yield return new WaitForSeconds(.1f);
+
+                }
+                break;
+            case EDropType.Spread:
+                for (int i = 0; i < deleted_symbols_cnt; i++)
+                {
+                    random_dir = get_random_dir();
+                    Symbol made_symbol = make_drop_Symbol(symbol_layer_parent, _symbol_drop_pos[0], ((block_type)get_random_num()).ToString(), get_index_by_coordinate(line_cnt / 2, row_cnt - 2));
+                    made_symbol.transform.DOMove(_map_manager.get_box_pos_by_index(get_index_by_coordinate(line_cnt / 2, row_cnt - 2)).position, .1f);
+
+                    base_ball = made_symbol;
+                    curr_ball_index = base_ball._symbol_stat._block_num;
+                    yield return new WaitForSeconds(.1f);
 
 
-            //밑, 왼쪽아래, 오른쪽 아래 우선순위 순서로 떨궈준다.
-            while (true)
-            {
-                if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down])==null && 
-                    PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) !=0)
-                {
-                    go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
+                    //밑, 왼쪽아래, 오른쪽 아래 우선순위 순서로 떨궈준다.
+                    while (true)
+                    {
+                        if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) == null &&
+                            PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
+
+                        }
+                        else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) == null &&
+                            PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down];
+                        }
+                        else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) == null &&
+                            PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) != 0)
+                        {
+                            go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down];
+                        }
+                        else
+                        {
+                            break;
+                        }
+                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
+                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
+                        _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
+                        if (curr_ball_index != go_to_index)
+                            _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
+                        curr_ball_index = go_to_index;
+                        base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
+                        yield return new WaitForSeconds(.1f);
+                        base_ball.play_anim(ESymbol_Anim.Win_2, -1, 0f);
+                        base_ball.transform.SetParent(symbol_layer_parent);
+                    }
 
                 }
-                else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) == null &&
-                    PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down]) != 0)
-                {
-                    go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.left_down];
-                }
-                else if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) == null &&
-                    PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down]) != 0)
-                {
-                    go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.right_down];
-                }
-                else
-                {
-                    break;
-                }
-                _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index),get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
-                _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
-                _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
-                if(curr_ball_index!=go_to_index)
-                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
-                curr_ball_index = go_to_index;
-                base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
-                yield return new WaitForSeconds(.1f);
-                base_ball.play_anim("Stop",-1,0f);
-            }
+                break;
+            case EDropType.Popup:
+                break;
 
         }
-
 
         if (ball_drop_callback != null)
         {
@@ -318,6 +409,9 @@ public class GameMainManager : SymbolManager
         //매칭값 없는 경우 되돌려
         if (check_match() == false)
         {
+            _ball_symbols_arr[get_x_coordinate_by_index(to_index), get_y_coordinate_by_index(to_index)].play_anim(ESymbol_Anim.Tension,-1,0f);
+            _ball_symbols_arr[get_x_coordinate_by_index(from_index), get_y_coordinate_by_index(from_index)].play_anim(ESymbol_Anim.Tension,-1,0f);
+            yield return new WaitForSeconds(.4f);
             get_ball_by_index(from_index).transform.DOMove(get_ball_by_index(to_index).transform.position, .4f);
             get_ball_by_index(to_index).transform.DOMove(get_ball_by_index(from_index).transform.position, .4f);
 
@@ -329,6 +423,7 @@ public class GameMainManager : SymbolManager
             _ball_symbols_arr[get_x_coordinate_by_index(to_index), get_y_coordinate_by_index(to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(from_index), get_y_coordinate_by_index(from_index)];
             _ball_symbols_arr[get_x_coordinate_by_index(from_index), get_y_coordinate_by_index(from_index)] = temp_return;
 
+            yield return new WaitForSeconds(.4f);
             _retry_btn.interactable = true;
         }
 
@@ -547,7 +642,7 @@ public class GameMainManager : SymbolManager
                 {
                     if (_ball_symbols_arr[i, j]._symbol_stat._is_delete)
                     {
-                        _ball_symbols_arr[i, j].play_anim("Win");
+                        _ball_symbols_arr[i, j].play_anim(ESymbol_Anim.Win_2);
                     }
 
                 }

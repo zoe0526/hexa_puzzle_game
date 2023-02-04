@@ -7,6 +7,17 @@ using UnityEngine.UIElements;
 using DG.Tweening;
 using System;
 
+
+public enum ESymbol_Anim
+{
+    Win,
+    Sleep,
+    Appear,
+    Tension,
+    Win_2
+}
+
+
 [Serializable]
 public class Symbol_stat
 {
@@ -50,10 +61,6 @@ public class Symbol : PooledObj,IBeginDragHandler,IDragHandler
 
     private string _symbol_name;
     private GameMainManager _gameMainManager;
-    Vector3 drag_pos;
-    Vector3 end_pos;
-    float move_distance;
-    float distance_angle = 60f;
 
     bool is_drag = false;
     Vector3 start_pos;
@@ -74,7 +81,9 @@ public class Symbol : PooledObj,IBeginDragHandler,IDragHandler
 
         //특별한 심볼값들만 따로 설정
         if(_type==block_type.Top)
-            _symbol_stat.init_symbol_stat(block_num, PublicInfos.Instance.Top_life, _type, around_index);
+        {
+
+        }
         else
             _symbol_stat.init_symbol_stat(block_num, 1, _type,around_index);
 
@@ -86,13 +95,13 @@ public class Symbol : PooledObj,IBeginDragHandler,IDragHandler
     {
         return _obj_name;
     }
-    public void play_anim(string anim_name)
+    public void play_anim(ESymbol_Anim anim_name)
     {
-        _symbol_anim.Play(anim_name);
+        _symbol_anim.Play(anim_name.ToString());
     }
-    public void play_anim(string anim_name,int layer, float normalize_time)
+    public void play_anim(ESymbol_Anim anim_name,int layer, float normalize_time)
     {
-        _symbol_anim.Play(anim_name,layer,normalize_time);
+        _symbol_anim.Play(anim_name.ToString(),layer,normalize_time);
     }
     public void OnBeginDrag(PointerEventData eventData)
     {

@@ -9,30 +9,50 @@ public class SymbolManager : MonoBehaviour
     public Symbol[,] _ball_symbols_arr;
     public int line_cnt;
     public int row_cnt;
-    public virtual void on_awake()
+    public virtual void on_start()
     {
         _ball_symbols_arr = new Symbol[PublicInfos.Instance.line_cnt, PublicInfos.Instance.row_cnt];
         line_cnt = PublicInfos.Instance.line_cnt;
         row_cnt = PublicInfos.Instance.row_cnt;
     }
-    public void init_Symbol(Transform parent_pos, string item_name, float offset, int block_num)
+    public void init_Symbol(Transform parent_pos,Vector3 pos, string item_name, int block_num)
     {
         _symbol = PoolAllocater.Instance.get_pool_obj(item_name + "_Pool").GetComponent<Symbol>();
         _symbol.transform.SetParent(parent_pos);
         _symbol.init_stat(block_num, get_around_ball_index(block_num));
         _symbol.transform.localScale = Vector3.one;
-        _symbol.transform.localPosition = new Vector3(0, offset, 0);
+        _symbol.transform.localPosition = pos;
         _symbol.gameObject.SetActive(true);
         _ball_symbols_arr[get_x_coordinate_by_index(block_num), get_y_coordinate_by_index(block_num)] = _symbol;
 
     }
-    public Symbol make_drop_Symbol(Transform parent_pos, string item_name, int block_num)
+    public Symbol make_drop_Symbol_just(Transform parent, Vector3[] pos, string item_name, int block_num)
     {
         _symbol = PoolAllocater.Instance.get_pool_obj(item_name + "_Pool").GetComponent<Symbol>();
-        _symbol.play_anim("Idle");
-        _symbol.transform.SetParent(parent_pos);
+        _symbol.play_anim(ESymbol_Anim.Sleep);
+        _symbol.transform.SetParent(parent);
         _symbol.transform.localScale = Vector3.one;
-        _symbol.transform.localPosition = Vector3.zero;
+        _symbol.transform.localPosition = pos[0];
+
+        _symbol.init_stat(block_num, get_around_ball_index(block_num));
+        _ball_symbols_arr[get_x_coordinate_by_index(block_num), get_y_coordinate_by_index(block_num)] = _symbol;
+        _symbol.gameObject.SetActive(true);
+
+        return _symbol;
+        /*
+         * 추후 셋팅
+        _symbol.init_stat(block_num, get_around_ball_index(block_num));
+        _ball_symbols_arr[get_x_coordinate_by_index(block_num), get_y_coordinate_by_index(block_num)] = _symbol;
+        */
+    }
+    public Symbol make_drop_Symbol(Transform parent,Vector3 pos, string item_name, int block_num)
+    {
+        _symbol = PoolAllocater.Instance.get_pool_obj(item_name + "_Pool").GetComponent<Symbol>();
+        _symbol.play_anim(ESymbol_Anim.Sleep);
+        _symbol.transform.SetParent(parent);
+        _symbol.transform.localScale = Vector3.one;
+        _symbol.transform.localPosition = pos;
+
         _symbol.init_stat(block_num, get_around_ball_index(block_num));
         _ball_symbols_arr[get_x_coordinate_by_index(block_num), get_y_coordinate_by_index(block_num)] = _symbol;
         _symbol.gameObject.SetActive(true);
