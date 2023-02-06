@@ -142,6 +142,7 @@ public class GameMainManager : SymbolManager
 
 
         //step1. 남아있는 심볼들을 바닥으로 떨궈준다.
+        /*
         for (int i = 1; i < line_cnt - 1; i++)
         {
             for (int j = 2; j < row_cnt - 1; j++)
@@ -171,15 +172,49 @@ public class GameMainManager : SymbolManager
                 }
 
             }
-            //yield return new WaitForSeconds(.1f);
         }
-        //yield return new WaitForSeconds(.1f);
+        */
 
         Symbol base_ball = null;
         int curr_ball_index = 0;
         int random_dir = 0;
+        for (int i = 1; i < line_cnt - 1; i++)
+        {
+            for (int j = 2; j < row_cnt - 1; j++)
+            {
+                base_ball = _ball_symbols_arr[i, j];
+                while (base_ball!=null)
+                {
+                    curr_ball_index = base_ball._symbol_stat._block_num;
+                    if (get_ball_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) == null &&
+                    PublicInfos.Instance.get_board_value_by_index(base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down]) != 0)
+                    {
+                        go_to_index = base_ball._symbol_stat._around_ball_index_arr[(int)swipe_direction.down];
+
+                    }
+                    else
+                    {
+                        break;
+                    }
+                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)].transform.DOMove(_map_manager.get_box_pos_by_index(go_to_index).position, .1f);
+                    _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)]._symbol_stat.set_ball_index(go_to_index, get_around_ball_index(go_to_index));
+                    _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)] = _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)];
+                    if (curr_ball_index != go_to_index)
+                        _ball_symbols_arr[get_x_coordinate_by_index(curr_ball_index), get_y_coordinate_by_index(curr_ball_index)] = null;
+                    curr_ball_index = go_to_index;
+                    base_ball = _ball_symbols_arr[get_x_coordinate_by_index(go_to_index), get_y_coordinate_by_index(go_to_index)];
+                    base_ball.play_anim(ESymbol_Anim.Win_2, -1, 0f);
+                    yield return new WaitForSeconds(.05f);
+
+                }
+
+            }
+
+        }
+
 
         //step2. 좌우에 빈칸이 존재하는데 맨위에 심볼들이존재할 경우 미끄러트려놔준다.
+
         if(PublicInfos.Instance.drop_type==EDropType.Spread)
         {
             for (int i = 1; i < line_cnt - 1; i++)
@@ -232,19 +267,22 @@ public class GameMainManager : SymbolManager
 
         //yield return new WaitForSeconds(.1f);
 
-         
+
         //step 3. 삭제된만큼 심볼들을 생성해준다.
         //위 포지션에 새로 생성 후 블록 위치로 이동
 
+        bool had_move = false;
         switch(PublicInfos.Instance.drop_type)
         {
             case EDropType.JustDrop:
                 while (deleted_symbols_cnt > 0)
                 {
+                    had_move = false;
                     for (int i = 1; i < each_line_deleted_symbol_cnt.Length - 1; i++)
                     {
                         if (each_line_deleted_symbol_cnt[i] > 0)
                         {
+                            had_move = true;
                             deleted_symbols_cnt--;
                             each_line_deleted_symbol_cnt[i]--;
                             Symbol made_symbol = make_drop_Symbol(symbol_layer_parent, _symbol_drop_pos[i - 1], ((block_type)get_random_num()).ToString(),
@@ -280,7 +318,8 @@ public class GameMainManager : SymbolManager
                         }
 
                     }
-                    yield return new WaitForSeconds(.1f);
+                    if(had_move)
+                        yield return new WaitForSeconds(.1f);
 
                 }
                 break;
@@ -440,6 +479,7 @@ public class GameMainManager : SymbolManager
                 bool delete_end = false;
                 PublicInfos.Instance.combo_cnt+=curr_flow_match_cnt;
                 update_combo_UI(PublicInfos.Instance.combo_cnt);
+                MonsterSpawner.Instance.monsters_damaged(curr_flow_match_cnt);
                 StartCoroutine(delete_balls(() => {
                     delete_end = true;
 
@@ -665,6 +705,7 @@ public class GameMainManager : SymbolManager
                 }
             }
         }
+
         yield return new WaitForSeconds(.1f);
         yield return StartCoroutine(drop_remaining_symbols(_match_symbol_list));
     }
